@@ -1,6 +1,8 @@
 ﻿using System;
 using System.IO;
+using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Web.Caching;
 using System.Web.Mvc;
 using Nustache.Core;
@@ -80,12 +82,59 @@ namespace Nustache.Mvc
 
             var templatePath = _controllerContext.HttpContext.Server.MapPath(path);
             var templateSource = File.ReadAllText(templatePath);
+
+            var sb = new StringBuilder();
+            MinifyHtml(
+                templateSource,
+                sb,
+
+                /* Safer to say false, per MinifyHtmlCodeGenerator.cs:28. */
+                false
+            );
+            templateSource = sb.ToString();
+
             var template = new Template();
             template.Load(new StringReader(templateSource));
 
             _controllerContext.HttpContext.Cache.Insert(key, template, new CacheDependency(templatePath));
 
             return template;
+        }
+
+        public static readonly char[] _lineSeparators = new [] { '\n', '\r' };
+
+        // Mostly copied from Meleze.Web.Razor.MinifyHtmlMinifier
+        private static void MinifyHtml(string content, StringBuilder builder, bool previousIsWhiteSpace) {
+            builder.Clear();
+            var lines = content.Split(_lineSeparators, StringSplitOptions.RemoveEmptyEntries);
+            for (int i = 0; i < lines.Length; i++)
+            {
+                var line = lines[i];
+                var trimmedLine = line.Trim();
+                if (trimmedLine.Length == 0)
+                {
+                    continue;
+                }
+                if (!previousIsWhiteSpace && char.IsWhiteSpace(line[0]) && (trimmedLine[0] != '<'))
+                {
+                    builder.Append(' ');
+                }
+                builder.Append(Regex.Replace(trimmedLine,@"\s+"," "));
+
+                var endsWithWhiteSpace = char.IsWhiteSpace(line[line.Length - 1]) && (trimmedLine[trimmedLine.Length - 1] != '>');
+                var hasEndOfLine = (i < lines.Length - 1) || (_lineSeparators.Any(s => s == content[content.Length - 1]));
+                if (hasEndOfLine)
+                {
+                    builder.Append(' '); // this is a change to the original meleze.web logic which has '\n'
+                }
+                else if (endsWithWhiteSpace)
+                {
+                    builder.Append(' ');
+                }
+                previousIsWhiteSpace = hasEndOfLine || endsWithWhiteSpace;
+            }
+
+            content = builder.ToString();
         }
 
         private Template FindPartial(string name)
@@ -97,7 +146,7 @@ namespace Nustache.Mvc
                 if (viewResult.View == null)
                 {
                     var stringBuilder = new StringBuilder();
-                    
+
                     foreach (var str in viewResult.SearchedLocations)
                     {
                         stringBuilder.AppendLine();
