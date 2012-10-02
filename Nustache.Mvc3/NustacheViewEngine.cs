@@ -1,4 +1,5 @@
-﻿using System.Web;
+﻿using System;
+using System.Web;
 using System.Web.Mvc;
 using Nustache.Core;
 
@@ -15,6 +16,8 @@ namespace Nustache.Mvc
             SetLocationFormats();
             RootContext = NustacheViewEngineRootContext.ViewData;
         }
+
+        public Func<string, string> MinifyFunc { get; set; }
 
         private void SetLocationFormats()
         {
@@ -66,7 +69,7 @@ namespace Nustache.Mvc
 
         private IView GetView(ControllerContext controllerContext, string viewPath, string masterPath)
         {
-            return new NustacheView(this, controllerContext, viewPath, masterPath);
+            return new NustacheView(this, controllerContext, viewPath, masterPath, MinifyFunc);
         }
     }
 

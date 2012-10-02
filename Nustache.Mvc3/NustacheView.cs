@@ -15,17 +15,21 @@ namespace Nustache.Mvc
         private readonly ControllerContext _controllerContext;
         private readonly string _viewPath;
         private readonly string _masterPath;
+        private readonly Func<string, string> _minifyFunc;
 
         public NustacheView(
             NustacheViewEngine engine,
             ControllerContext controllerContext,
             string viewPath,
-            string masterPath)
+            string masterPath,
+            Func<string,string> minifyFunc
+        )
         {
             _engine = engine;
             _controllerContext = controllerContext;
             _viewPath = viewPath;
             _masterPath = masterPath;
+            _minifyFunc = minifyFunc;
         }
 
         public void Render(ViewContext viewContext, TextWriter writer)
@@ -83,15 +87,7 @@ namespace Nustache.Mvc
             var templatePath = _controllerContext.HttpContext.Server.MapPath(path);
             var templateSource = File.ReadAllText(templatePath);
 
-            var sb = new StringBuilder();
-            MinifyHtml(
-                templateSource,
-                sb,
-
-                /* Safer to say false, per MinifyHtmlCodeGenerator.cs:28. */
-                false
-            );
-            templateSource = sb.ToString();
+            if (_minifyFunc != null) templateSource = _minifyFunc(templateSource);
 
             var template = new Template();
             template.Load(new StringReader(templateSource));
@@ -102,40 +98,6 @@ namespace Nustache.Mvc
         }
 
         public static readonly char[] _lineSeparators = new [] { '\n', '\r' };
-
-        // Mostly copied from Meleze.Web.Razor.MinifyHtmlMinifier
-        private static void MinifyHtml(string content, StringBuilder builder, bool previousIsWhiteSpace) {
-            builder.Clear();
-            var lines = content.Split(_lineSeparators, StringSplitOptions.RemoveEmptyEntries);
-            for (int i = 0; i < lines.Length; i++)
-            {
-                var line = lines[i];
-                var trimmedLine = line.Trim();
-                if (trimmedLine.Length == 0)
-                {
-                    continue;
-                }
-                if (!previousIsWhiteSpace && char.IsWhiteSpace(line[0]) && (trimmedLine[0] != '<'))
-                {
-                    builder.Append(' ');
-                }
-                builder.Append(Regex.Replace(trimmedLine,@"\s+"," "));
-
-                var endsWithWhiteSpace = char.IsWhiteSpace(line[line.Length - 1]) && (trimmedLine[trimmedLine.Length - 1] != '>');
-                var hasEndOfLine = (i < lines.Length - 1) || (_lineSeparators.Any(s => s == content[content.Length - 1]));
-                if (hasEndOfLine)
-                {
-                    builder.Append(' '); // this is a change to the original meleze.web logic which has '\n'
-                }
-                else if (endsWithWhiteSpace)
-                {
-                    builder.Append(' ');
-                }
-                previousIsWhiteSpace = hasEndOfLine || endsWithWhiteSpace;
-            }
-
-            content = builder.ToString();
-        }
 
         private Template FindPartial(string name)
         {
