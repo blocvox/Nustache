@@ -97,8 +97,6 @@ namespace Nustache.Mvc
             return template;
         }
 
-        public static readonly char[] _lineSeparators = new [] { '\n', '\r' };
-
         private Template FindPartial(string name)
         {
             var viewResult = _engine.FindPartialView(_controllerContext, name, false);
